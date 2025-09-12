@@ -397,29 +397,9 @@ export default function DashboardPage() {
                           />
                         </FormControl>
                       </FormItem>
-
-                      <FormItem>
-                        <FormLabel>Prioridade *</FormLabel>
-                        <FormControl>
-                          <Select 
-                            value={formData.prioridade} 
-                            onValueChange={(value) => handleInputChange('prioridade', value)}
-                            disabled={isSubmitting}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione a prioridade" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="MUITO_URGENTE">Muito Urgente</SelectItem>
-                              <SelectItem value="URGENTE">Urgente</SelectItem>
-                              <SelectItem value="POUCO_URGENTE">Pouco Urgente</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FormControl>
-                        {errors.prioridade && <FormMessage>{errors.prioridade}</FormMessage>}
-                      </FormItem>
                     </div>
                     
+                    {/* Sintomas primeiro */}
                     <FormItem>
                       <FormLabel>Sintomas *</FormLabel>
                       <FormControl>
@@ -432,6 +412,28 @@ export default function DashboardPage() {
                         />
                       </FormControl>
                       {errors.sintomas && <FormMessage>{errors.sintomas}</FormMessage>}
+                    </FormItem>
+
+                    {/* Prioridade depois */}
+                    <FormItem>
+                      <FormLabel>Prioridade *</FormLabel>
+                      <FormControl>
+                        <Select 
+                          value={formData.prioridade} 
+                          onValueChange={(value) => handleInputChange('prioridade', value)}
+                          disabled={isSubmitting}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a prioridade" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="MUITO_URGENTE">Muito Urgente</SelectItem>
+                            <SelectItem value="URGENTE">Urgente</SelectItem>
+                            <SelectItem value="POUCO_URGENTE">Pouco Urgente</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      {errors.prioridade && <FormMessage>{errors.prioridade}</FormMessage>}
                     </FormItem>
 
                     <Button 

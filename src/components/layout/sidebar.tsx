@@ -18,7 +18,6 @@ import { Button } from '@/components/ui/button'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Registrar Paciente', href: '/pacientes', icon: Users },
   { name: 'Fila de Espera', href: '/fila', icon: Clock },
   { name: 'Relatórios', href: '/relatorios', icon: FileText },
   { name: 'Configurações', href: '/configuracoes', icon: Settings },
