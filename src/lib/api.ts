@@ -113,3 +113,28 @@ export const dashboardAPI = {
     return response.data
   },
 }
+
+
+export const relatorioAPI = {
+  gerar: async (filtros: any) => {
+    const response = await api.post('/relatorios/gerar', filtros)
+    return response.data
+  },
+
+  listar: async (params?: { page?: number; limit?: number }) => {
+    const response = await api.get('/relatorios', { params })
+    return response.data
+  },
+
+  getById: async (id: string) => {
+    const response = await api.get(`/relatorios/${id}`)
+    return response.data
+  },
+
+  download: async (id: string, formato: string) => {
+    const response = await api.get(`/relatorios/${id}/download?formato=${formato}`, {
+      responseType: 'blob'
+    })
+    return response.data
+  }
+}
