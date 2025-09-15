@@ -13,7 +13,7 @@ export interface Usuario {
 export interface Paciente {
   id: string
   nomeCompleto: string
-  numeroIdentificacao: string
+  numeroIdentificacao?: string
   idade: number
   dataNascimento?: string
   telefone?: string

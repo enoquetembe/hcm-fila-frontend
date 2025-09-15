@@ -1,4 +1,3 @@
-// src/app/dashboard/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -107,12 +106,10 @@ export default function DashboardPage() {
       newErrors.nomeCompleto = 'Nome completo é obrigatório'
     }
 
-    if (!formData.numeroIdentificacao.trim()) {
-      newErrors.numeroIdentificacao = 'Número de identificação é obrigatório'
-    }
+    // Número de identificação NÃO é mais obrigatório - removida validação
 
-    if (!formData.idade || formData.idade <= 0 || formData.idade > 18) {
-      newErrors.idade = 'Idade deve estar entre 1 e 18 anos'
+    if (!formData.idade || formData.idade < 0 || formData.idade > 14) { // Alterado para 0-14
+      newErrors.idade = 'Idade deve estar entre 0 e 14 anos'
     }
 
     if (!formData.sintomas.trim()) {
@@ -144,7 +141,7 @@ export default function DashboardPage() {
       // 1. Criar paciente
       const novoPaciente = await criarPacienteMutation.mutateAsync({
         nomeCompleto: formData.nomeCompleto,
-        numeroIdentificacao: formData.numeroIdentificacao,
+        numeroIdentificacao: formData.numeroIdentificacao || undefined, // Pode ser undefined
         idade: formData.idade,
         telefone: formData.telefone || undefined,
         responsavel: formData.responsavel || undefined,
@@ -335,16 +332,16 @@ export default function DashboardPage() {
                       </FormItem>
 
                       <FormItem>
-                        <FormLabel>Número de Identificação *</FormLabel>
+                        <FormLabel>Número de Identificação</FormLabel> {/* Removido * */}
                         <FormControl>
                           <Input 
-                            placeholder="ID do paciente..."
+                            placeholder="ID do paciente (opcional)..."
                             value={formData.numeroIdentificacao}
                             onChange={(e) => handleInputChange('numeroIdentificacao', e.target.value)}
                             disabled={isSubmitting}
                           />
                         </FormControl>
-                        {errors.numeroIdentificacao && <FormMessage>{errors.numeroIdentificacao}</FormMessage>}
+                        {/* Removida validação de erro para número de identificação */}
                       </FormItem>
 
                       <FormItem>
@@ -352,8 +349,8 @@ export default function DashboardPage() {
                         <FormControl>
                           <Input 
                             type="number" 
-                            min="1" 
-                            max="18"
+                            min="0" 
+                            max="14"
                             value={formData.idade || ''}
                             onChange={(e) => handleInputChange('idade', parseInt(e.target.value) || 0)}
                             disabled={isSubmitting}

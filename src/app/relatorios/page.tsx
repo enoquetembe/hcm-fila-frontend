@@ -609,35 +609,6 @@ const handleImprimir = async (relatorioId: string) => {
             })}
           </div>
 
-          {/* Análise Comparativa */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <BarChart3 className="h-5 w-5 mr-2 text-pink-500" />
-                Análise Comparativa
-              </CardTitle>
-              <CardDescription>
-                Compare diferentes períodos, turnos, prioridades e identifique padrões e oportunidades de melhoria.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="p-4 border rounded-lg">
-                  <div className="text-2xl font-bold">5</div>
-                  <div className="text-sm text-gray-500">DIMENSÕES</div>
-                </div>
-                <div className="p-4 border rounded-lg">
-                  <div className="text-2xl font-bold">15+</div>
-                  <div className="text-sm text-gray-500">GRÁFICOS</div>
-                </div>
-                <div className="p-4 border rounded-lg">
-                  <div className="text-2xl font-bold">📊</div>
-                  <div className="text-sm text-gray-500">INSIGHTS</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Filtros Avançados */}
           <Card>
             <CardHeader>
@@ -763,7 +734,7 @@ const handleImprimir = async (relatorioId: string) => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-                {['PDF', 'Excel', 'CSV', 'Imagem', 'Email', 'Imprimir'].map((format) => (
+                {['PDF', 'CSV', 'Email', 'Imprimir'].map((format) => (
                   <Button 
                      key={format}
                     variant="outline" 
@@ -782,9 +753,7 @@ const handleImprimir = async (relatorioId: string) => {
                   >
                     <div className="text-2xl">
                       {format === 'PDF' && '📄'}
-                      {format === 'Excel' && '📊'}
                       {format === 'CSV' && '📋'}
-                      {format === 'Imagem' && '🖼️'}
                       {format === 'Email' && '📧'}
                       {format === 'Imprimir' && '🖨️'}
                     </div>

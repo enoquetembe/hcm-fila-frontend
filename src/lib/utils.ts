@@ -93,3 +93,4 @@ export function formatTempoEspera(minutos: number) {
   const minutosRestantes = minutos % 60
   return `${horas}h ${minutosRestantes}min`
 }
+
