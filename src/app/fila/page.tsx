@@ -1,4 +1,3 @@
-// src/app/fila/page.tsx
 'use client'
 
 import { useState } from 'react'
@@ -12,7 +11,8 @@ import {
   UserX,
   Play,
   Pause,
-  RotateCcw
+  RotateCcw,
+  Loader2
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -28,12 +28,13 @@ export default function FilaPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [acaoEmAndamento, setAcaoEmAndamento] = useState<string | null>(null)
 
-  // Query para buscar fila atual
-  const { data: filaData, isLoading, refetch } = useQuery({
+  // Query para buscar fila atual com polling rápido
+  const { data: filaData, isLoading } = useQuery({
     queryKey: ['fila-atual'],
     queryFn: senhaAPI.getFilaAtual,
-    refetchInterval: 10000, // Atualizar a cada 10 segundos
+    refetchInterval: 3000, // 3 segundos
   })
 
   const senhas = filaData?.fila || []
@@ -55,18 +56,19 @@ export default function FilaPage() {
   const handleChamarProximo = async () => {
     try {
       await senhaAPI.chamarProximo()
-      refetch()
     } catch (error) {
       console.error('Erro ao chamar próximo paciente:', error)
     }
   }
 
   const handleUpdateStatus = async (senhaId: string, status: string) => {
+    setAcaoEmAndamento(`${senhaId}-${status}`)
     try {
       await senhaAPI.updateStatus(senhaId, status)
-      refetch()
     } catch (error) {
       console.error('Erro ao atualizar status:', error)
+    } finally {
+      setAcaoEmAndamento(null)
     }
   }
 
@@ -319,16 +321,26 @@ export default function FilaPage() {
                                 size="sm"
                                 onClick={() => handleUpdateStatus(senha.id, 'CHAMANDO')}
                                 className="bg-blue-600 hover:bg-blue-700"
+                                disabled={acaoEmAndamento === `${senha.id}-CHAMANDO`}
                               >
-                                <Phone className="h-3 w-3 mr-1" />
+                                {acaoEmAndamento === `${senha.id}-CHAMANDO` ? (
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                ) : (
+                                  <Phone className="h-3 w-3 mr-1" />
+                                )}
                                 Chamar
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleUpdateStatus(senha.id, 'EM_ATENDIMENTO')}
+                                disabled={acaoEmAndamento === `${senha.id}-EM_ATENDIMENTO`}
                               >
-                                <Play className="h-3 w-3 mr-1" />
+                                {acaoEmAndamento === `${senha.id}-EM_ATENDIMENTO` ? (
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                ) : (
+                                  <Play className="h-3 w-3 mr-1" />
+                                )}
                                 Iniciar
                               </Button>
                             </>
@@ -339,8 +351,13 @@ export default function FilaPage() {
                               size="sm"
                               onClick={() => handleUpdateStatus(senha.id, 'EM_ATENDIMENTO')}
                               className="bg-green-600 hover:bg-green-700"
+                              disabled={acaoEmAndamento === `${senha.id}-EM_ATENDIMENTO`}
                             >
-                              <UserCheck className="h-3 w-3 mr-1" />
+                              {acaoEmAndamento === `${senha.id}-EM_ATENDIMENTO` ? (
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              ) : (
+                                <UserCheck className="h-3 w-3 mr-1" />
+                              )}
                               Atender
                             </Button>
                           )}
@@ -350,8 +367,13 @@ export default function FilaPage() {
                               size="sm"
                               onClick={() => handleUpdateStatus(senha.id, 'ATENDIDO')}
                               className="bg-gray-600 hover:bg-gray-700"
+                              disabled={acaoEmAndamento === `${senha.id}-ATENDIDO`}
                             >
-                              <Pause className="h-3 w-3 mr-1" />
+                              {acaoEmAndamento === `${senha.id}-ATENDIDO` ? (
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              ) : (
+                                <Pause className="h-3 w-3 mr-1" />
+                              )}
                               Finalizar
                             </Button>
                           )}
@@ -360,8 +382,13 @@ export default function FilaPage() {
                             size="sm"
                             variant="destructive"
                             onClick={() => handleUpdateStatus(senha.id, 'CANCELADO')}
+                            disabled={acaoEmAndamento === `${senha.id}-CANCELADO`}
                           >
-                            <UserX className="h-3 w-3" />
+                            {acaoEmAndamento === `${senha.id}-CANCELADO` ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <UserX className="h-3 w-3" />
+                            )}
                           </Button>
                         </div>
                       </div>

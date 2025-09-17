@@ -1,4 +1,3 @@
-// src/app/layout.tsx
 'use client'
 
 import { Inter } from 'next/font/google'
@@ -16,8 +15,14 @@ export default function RootLayout({
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 5 * 60 * 1000, // 5 minutos
-        refetchOnWindowFocus: false,
+        staleTime: 1000 * 5, // 5 segundos
+        cacheTime: 1000 * 15, // 15 segundos
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
+        refetchOnMount: true,
+      },
+      mutations: {
+        retry: 1,
       },
     },
   }))
