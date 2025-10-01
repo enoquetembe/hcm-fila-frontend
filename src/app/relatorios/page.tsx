@@ -13,7 +13,9 @@ import {
   Clock,
   Loader2,
   Eye,
-  Printer
+  Printer,
+  AlertTriangle,
+  UserCheck
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,7 +25,7 @@ import { Input } from '@/components/ui/input'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { relatorioAPI } from '@/lib/api'
+import { relatorioAPI, dashboardAPI } from '@/lib/api'
 import { useAuthStore } from '@/store/auth-store'
 
 interface FiltrosRelatorio {
@@ -55,9 +57,15 @@ export default function RelatoriosPage() {
   const [prioridade, setPrioridade] = useState('Todas as Prioridades')
   const [turno, setTurno] = useState('Todos os Turnos')
   const [faixaEtaria, setFaixaEtaria] = useState('Todas as Idades')
-  const [relatorioSelecionado, setRelatorioSelecionado] = useState<string | null>(null)
   
   const { usuario } = useAuthStore()
+
+  // Query para estatísticas em tempo real
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: dashboardAPI.getStats,
+    refetchInterval: 30000, // Atualizar a cada 30 segundos
+  })
 
   // Query para listar relatórios
   const { data: relatorios, isLoading: loadingRelatorios, refetch: refetchRelatorios } = useQuery({
@@ -65,6 +73,8 @@ export default function RelatoriosPage() {
     queryFn: () => relatorioAPI.listar(),
     enabled: !!usuario
   })
+
+  const stats = statsData?.stats
 
   // Preparar filtros para a API
   const prepararFiltros = (): FiltrosRelatorio => {
@@ -115,328 +125,389 @@ export default function RelatoriosPage() {
     }
   })
 
- // Adicione estas funções auxiliares no seu arquivo
-const handleDownload = async (relatorioId: string, formato: string) => {
-  try {
-    if (formato === 'pdf') {
-      // Para PDF, vamos criar no frontend já que o backend retorna JSON
-      await downloadPDF(relatorioId);
-    } else if (formato === 'csv') {
-      // Para CSV, criar a partir dos dados
-      await downloadCSV(relatorioId);
-    } else {
-      // Para JSON, usar o download normal da API
-      const blob = await relatorioAPI.download(relatorioId, formato);
-      downloadBlob(blob, relatorioId, formato);
-    }
-  } catch (error: any) {
-    alert(error.response?.data?.error || 'Erro ao baixar relatório');
-  }
-};
-
-const downloadBlob = (blob: Blob, relatorioId: string, formato: string) => {
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  
-  const relatorio = relatorios?.relatorios.find((r: Relatorio) => r.id === relatorioId);
-  const extensao = formato.toLowerCase();
-  link.download = `${relatorio?.titulo || 'relatorio'}.${extensao}`;
-  
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(url);
-};
-
-const downloadPDF = async (relatorioId: string) => {
-  try {
-    const relatorio = relatorios?.relatorios.find((r: Relatorio) => r.id === relatorioId);
-    if (!relatorio) return;
-
-    // Usar uma biblioteca para gerar PDF - você precisa instalar jspdf
-    // npm install jspdf
-    const { jsPDF } = await import('jspdf');
-    
-    const doc = new jsPDF();
-    const dados = JSON.parse(relatorio.dadosJson);
-
-    // Adicionar título
-    doc.setFontSize(18);
-    doc.text(relatorio.titulo, 14, 15);
-    
-    // Informações do relatório
-    doc.setFontSize(10);
-    doc.text(`Gerado em: ${new Date(relatorio.geradoEm).toLocaleDateString('pt-BR')}`, 14, 25);
-    doc.text(`Por: ${relatorio.usuario.nome}`, 14, 30);
-
-    // Estatísticas
-    doc.setFontSize(12);
-    doc.text('Estatísticas:', 14, 40);
-    
-    doc.setFontSize(10);
-    let yPos = 45;
-    doc.text(`Total de Senhas: ${dados.estatisticas.totalSenhas || 0}`, 20, yPos);
-    yPos += 5;
-    doc.text(`Atendimentos Concluídos: ${dados.estatisticas.atendimentosConcluidos || 0}`, 20, yPos);
-    yPos += 5;
-    doc.text(`Tempo Médio de Espera: ${dados.estatisticas.tempoMedioEspera || 0} minutos`, 20, yPos);
-    yPos += 10;
-
-    // Tabela de detalhes
-    if (dados.detalhes && dados.detalhes.length > 0) {
-      doc.setFontSize(12);
-      doc.text('Detalhes das Senhas:', 14, yPos);
-      yPos += 10;
-
-      // Cabeçalhos da tabela
-      doc.setFontSize(10);
-      doc.text('Código', 14, yPos);
-      doc.text('Paciente', 40, yPos);
-      doc.text('Prioridade', 80, yPos);
-      doc.text('Status', 110, yPos);
-      doc.text('Tempo', 140, yPos);
-      yPos += 5;
-
-      // Linhas da tabela
-      dados.detalhes.slice(0, 20).forEach((item: any) => {
-        if (yPos > 270) {
-          doc.addPage();
-          yPos = 20;
-        }
-        
-        doc.text(item.codigo || '', 14, yPos);
-        doc.text(item.paciente?.nome?.substring(0, 15) || '', 40, yPos);
-        doc.text(item.prioridade || '', 80, yPos);
-        doc.text(item.status || '', 110, yPos);
-        doc.text(`${item.tempoEspera || 0} min`, 140, yPos);
-        yPos += 5;
-      });
-
-      if (dados.detalhes.length > 20) {
-        doc.text(`... e mais ${dados.detalhes.length - 20} registros`, 14, yPos);
+  const handleDownload = async (relatorioId: string, formato: string) => {
+    try {
+      if (formato === 'pdf') {
+        await downloadPDF(relatorioId);
+      } else if (formato === 'csv') {
+        await downloadCSV(relatorioId);
+      } else {
+        const blob = await relatorioAPI.download(relatorioId, formato);
+        downloadBlob(blob, relatorioId, formato);
       }
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Erro ao baixar relatório');
     }
+  };
 
-    // Salvar PDF
-    doc.save(`${relatorio.titulo}.pdf`);
-
-  } catch (error) {
-    console.error('Erro ao gerar PDF:', error);
-    // Fallback: baixar como JSON
+  const downloadBlob = (blob: Blob, relatorioId: string, formato: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
     const relatorio = relatorios?.relatorios.find((r: Relatorio) => r.id === relatorioId);
-    if (relatorio) {
-      const blob = new Blob([relatorio.dadosJson], { type: 'application/json' });
-      downloadBlob(blob, relatorioId, 'json');
-    }
-  }
-};
+    const extensao = formato.toLowerCase();
+    link.download = `${relatorio?.titulo || 'relatorio'}.${extensao}`;
+    
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
 
-const downloadCSV = async (relatorioId: string) => {
+  // const downloadPDF = async (relatorioId: string) => {
+  //   try {
+  //     const relatorio = relatorios?.relatorios.find((r: Relatorio) => r.id === relatorioId);
+  //     if (!relatorio) return;
+
+  //     const { jsPDF } = await import('jspdf');
+      
+  //     const doc = new jsPDF();
+  //     const dados = JSON.parse(relatorio.dadosJson);
+
+  //     doc.setFontSize(18);
+  //     doc.text(relatorio.titulo, 14, 15);
+      
+  //     doc.setFontSize(10);
+  //     doc.text(`Gerado em: ${new Date(relatorio.geradoEm).toLocaleDateString('pt-BR')}`, 14, 25);
+  //     doc.text(`Por: ${relatorio.usuario.nome}`, 14, 30);
+
+  //     doc.setFontSize(12);
+  //     doc.text('Estatísticas:', 14, 40);
+      
+  //     doc.setFontSize(10);
+  //     let yPos = 45;
+  //     doc.text(`Total de Senhas: ${dados.estatisticas.totalSenhas || 0}`, 20, yPos);
+  //     yPos += 5;
+  //     doc.text(`Atendimentos Concluídos: ${dados.estatisticas.atendimentosConcluidos || 0}`, 20, yPos);
+  //     yPos += 5;
+  //     doc.text(`Tempo Médio de Espera: ${dados.estatisticas.tempoMedioEspera || 0} minutos`, 20, yPos);
+  //     yPos += 10;
+
+  //     if (dados.detalhes && dados.detalhes.length > 0) {
+  //       doc.setFontSize(12);
+  //       doc.text('Detalhes das Senhas:', 14, yPos);
+  //       yPos += 10;
+
+  //       doc.setFontSize(10);
+  //       doc.text('Código', 14, yPos);
+  //       doc.text('Paciente', 40, yPos);
+  //       doc.text('Prioridade', 80, yPos);
+  //       doc.text('Status', 110, yPos);
+  //       doc.text('Tempo', 140, yPos);
+  //       yPos += 5;
+
+  //       dados.detalhes.slice(0, 20).forEach((item: any) => {
+  //         if (yPos > 270) {
+  //           doc.addPage();
+  //           yPos = 20;
+  //         }
+          
+  //         doc.text(item.codigo || '', 14, yPos);
+  //         doc.text(item.paciente?.nome?.substring(0, 15) || '', 40, yPos);
+  //         doc.text(item.prioridade || '', 80, yPos);
+  //         doc.text(item.status || '', 110, yPos);
+  //         doc.text(`${item.tempoEspera || 0} min`, 140, yPos);
+  //         yPos += 5;
+  //       });
+
+  //       if (dados.detalhes.length > 20) {
+  //         doc.text(`... e mais ${dados.detalhes.length - 20} registros`, 14, yPos);
+  //       }
+  //     }
+
+  //     doc.save(`${relatorio.titulo}.pdf`);
+
+  //   } catch (error) {
+  //     console.error('Erro ao gerar PDF:', error);
+  //     const relatorio = relatorios?.relatorios.find((r: Relatorio) => r.id === relatorioId);
+  //     if (relatorio) {
+  //       const blob = new Blob([relatorio.dadosJson], { type: 'application/json' });
+  //       downloadBlob(blob, relatorioId, 'json');
+  //     }
+  //   }
+  // };
+
+  const downloadPDF = async (relatorioId: string) => {
   try {
     const relatorio = relatorios?.relatorios.find((r: Relatorio) => r.id === relatorioId);
     if (!relatorio) return;
 
-    const dados = JSON.parse(relatorio.dadosJson);
-    
-    // Criar cabeçalhos CSV
-    let csvContent = 'Código,Paciente,Idade,Prioridade,Status,Tempo Espera (min),Sintomas\n';
-    
-    // Adicionar dados
-    dados.detalhes.forEach((item: any) => {
-      const linha = [
-        `"${item.codigo || ''}"`,
-        `"${item.paciente?.nome || ''}"`,
-        item.paciente?.idade || '',
-        `"${item.prioridade || ''}"`,
-        `"${item.status || ''}"`,
-        item.tempoEspera || 0,
-        `"${(item.sintomas || '').replace(/"/g, '""')}"`
-      ].join(',');
-      
-      csvContent += linha + '\n';
-    });
-
-    // Criar blob e baixar
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    downloadBlob(blob, relatorioId, 'csv');
-
-  } catch (error) {
-    console.error('Erro ao gerar CSV:', error);
-    alert('Erro ao gerar arquivo CSV');
-  }
-};
-
-// Também atualize a função handleImprimir para ser mais robusta
-const handleImprimir = async (relatorioId: string) => {
-  try {
-    const relatorio = relatorios?.relatorios.find((r: Relatorio) => r.id === relatorioId);
-    if (!relatorio) {
-      alert('Relatório não encontrado');
-      return;
-    }
+    const { jsPDF } = await import('jspdf');
+    await import('jspdf-autotable');
 
     const dados = JSON.parse(relatorio.dadosJson);
-    const janelaImpressao = window.open('', '_blank');
-    
-    if (!janelaImpressao) {
-      alert('Permita pop-ups para imprimir');
-      return;
-    }
+    const doc = new jsPDF('p', 'mm', 'a4');
 
-    janelaImpressao.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>${relatorio.titulo}</title>
-        <style>
-          body { 
-            font-family: Arial, sans-serif; 
-            margin: 20px; 
-            font-size: 12px;
-          }
-          .header { 
-            text-align: center; 
-            margin-bottom: 20px;
-            border-bottom: 2px solid #333;
-            padding-bottom: 10px;
-          }
-          .section { 
-            margin-bottom: 15px; 
-          }
-          table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-bottom: 15px;
-            font-size: 10px;
-          }
-          th, td { 
-            border: 1px solid #ddd; 
-            padding: 6px; 
-            text-align: left; 
-          }
-          th { 
-            background-color: #f5f5f5; 
-            font-weight: bold;
-          }
-          .stats-grid { 
-            display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
-            gap: 10px; 
-            margin-bottom: 15px;
-          }
-          .stat-card { 
-            border: 1px solid #ddd; 
-            padding: 10px; 
-            border-radius: 4px;
-            text-align: center;
-          }
-          .stat-card h3 {
-            margin: 0 0 5px 0;
-            font-size: 11px;
-            color: #666;
-          }
-          .stat-card p {
-            margin: 0;
-            font-size: 14px;
-            font-weight: bold;
-          }
-          @media print {
-            body { margin: 10px; }
-            .no-print { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
+    // Monta o HTML igual ao do handleImprimir
+    const conteudoHTML = `
+      <div style="font-family: Arial, sans-serif; font-size: 12px; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px;">
           <h1 style="margin: 0 0 5px 0; font-size: 16px;">${relatorio.titulo}</h1>
           <p style="margin: 0; color: #666;">Gerado em: ${new Date(relatorio.geradoEm).toLocaleDateString('pt-BR')} às ${new Date(relatorio.geradoEm).toLocaleTimeString('pt-BR')}</p>
           <p style="margin: 0; color: #666;">Por: ${relatorio.usuario.nome}</p>
         </div>
 
-        <div class="section">
-          <h2 style="margin: 0 0 10px 0; font-size: 14px;">Estatísticas</h2>
-          <div class="stats-grid">
-            <div class="stat-card">
-              <h3>Total de Senhas</h3>
-              <p>${dados.estatisticas.totalSenhas || 0}</p>
-            </div>
-            <div class="stat-card">
-              <h3>Atendimentos Concluídos</h3>
-              <p>${dados.estatisticas.atendimentosConcluidos || 0}</p>
-            </div>
-            <div class="stat-card">
-              <h3>Tempo Médio de Espera</h3>
-              <p>${dados.estatisticas.tempoMedioEspera || 0} min</p>
-            </div>
-          </div>
-        </div>
+        <h2 style="margin: 0 0 10px 0; font-size: 14px;">Estatísticas</h2>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: center;"><b>Total de Senhas</b><br>${dados.estatisticas.totalSenhas || 0}</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: center;"><b>Atendimentos Concluídos</b><br>${dados.estatisticas.atendimentosConcluidos || 0}</td>
+            <td style="border: 1px solid #ddd; padding: 8px; text-align: center;"><b>Tempo Médio de Espera</b><br>${dados.estatisticas.tempoMedioEspera || 0} min</td>
+          </tr>
+        </table>
 
-        <div class="section">
-          <h2 style="margin: 0 0 10px 0; font-size: 14px;">Detalhes das Senhas (${dados.detalhes.length})</h2>
-          <table>
-            <thead>
+        <h2 style="margin: 0 0 10px 0; font-size: 14px;">Detalhes das Senhas (${dados.detalhes.length})</h2>
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+          <thead>
+            <tr>
+              <th style="border: 1px solid #ddd; padding: 6px;">Código</th>
+              <th style="border: 1px solid #ddd; padding: 6px;">Paciente</th>
+              <th style="border: 1px solid #ddd; padding: 6px;">Idade</th>
+              <th style="border: 1px solid #ddd; padding: 6px;">Prioridade</th>
+              <th style="border: 1px solid #ddd; padding: 6px;">Status</th>
+              <th style="border: 1px solid #ddd; padding: 6px;">Tempo Espera</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${dados.detalhes.map((item: any) => `
               <tr>
-                <th>Código</th>
-                <th>Paciente</th>
-                <th>Idade</th>
-                <th>Prioridade</th>
-                <th>Status</th>
-                <th>Tempo Espera</th>
+                <td style="border: 1px solid #ddd; padding: 6px;">${item.codigo || '-'}</td>
+                <td style="border: 1px solid #ddd; padding: 6px;">${item.paciente?.nome || '-'}</td>
+                <td style="border: 1px solid #ddd; padding: 6px;">${item.paciente?.idade || '-'}</td>
+                <td style="border: 1px solid #ddd; padding: 6px;">${item.prioridade || '-'}</td>
+                <td style="border: 1px solid #ddd; padding: 6px;">${item.status || '-'}</td>
+                <td style="border: 1px solid #ddd; padding: 6px;">${item.tempoEspera || 0} min</td>
               </tr>
-            </thead>
-            <tbody>
-              ${dados.detalhes.slice(0, 50).map((item: any) => `
-                <tr>
-                  <td>${item.codigo || '-'}</td>
-                  <td>${item.paciente?.nome || '-'}</td>
-                  <td>${item.paciente?.idade || '-'}</td>
-                  <td>${item.prioridade || '-'}</td>
-                  <td>${item.status || '-'}</td>
-                  <td>${item.tempoEspera || 0} min</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          ${dados.detalhes.length > 50 ? 
-            `<p style="text-align: center; color: #666; font-style: italic;">
-              ... e mais ${dados.detalhes.length - 50} registros
-            </p>` : ''}
-        </div>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
 
-        <div class="no-print" style="margin-top: 20px; text-align: center;">
-          <button onclick="window.print()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
-            Imprimir
-          </button>
-          <button onclick="window.close()" style="padding: 10px 20px; margin-left: 10px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
-            Fechar
-          </button>
-        </div>
-      </body>
-      </html>
-    `);
-    
-    janelaImpressao.document.close();
-    
-  } catch (error: any) {
-    console.error('Erro ao preparar impressão:', error);
-    alert('Erro ao preparar a impressão: ' + error.message);
+    // Usa o método html do jsPDF para renderizar igual a tela
+    await doc.html(conteudoHTML, {
+      callback: function (doc) {
+        doc.save(`${relatorio.titulo}.pdf`);
+      },
+      x: 10,
+      y: 10,
+      width: 190,
+      windowWidth: 800
+    });
+
+  } catch (error) {
+    console.error('Erro ao gerar PDF estilizado:', error);
+    alert('Erro ao gerar PDF');
   }
 };
+
+
+  const downloadCSV = async (relatorioId: string) => {
+    try {
+      const relatorio = relatorios?.relatorios.find((r: Relatorio) => r.id === relatorioId);
+      if (!relatorio) return;
+
+      const dados = JSON.parse(relatorio.dadosJson);
+      
+      let csvContent = 'Código,Paciente,Idade,Prioridade,Status,Tempo Espera (min),Sintomas\n';
+      
+      dados.detalhes.forEach((item: any) => {
+        const linha = [
+          `"${item.codigo || ''}"`,
+          `"${item.paciente?.nome || ''}"`,
+          item.paciente?.idade || '',
+          `"${item.prioridade || ''}"`,
+          `"${item.status || ''}"`,
+          item.tempoEspera || 0,
+          `"${(item.sintomas || '').replace(/"/g, '""')}"`
+        ].join(',');
+        
+        csvContent += linha + '\n';
+      });
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      downloadBlob(blob, relatorioId, 'csv');
+
+    } catch (error) {
+      console.error('Erro ao gerar CSV:', error);
+      alert('Erro ao gerar arquivo CSV');
+    }
+  };
+
+  const handleImprimir = async (relatorioId: string) => {
+    try {
+      const relatorio = relatorios?.relatorios.find((r: Relatorio) => r.id === relatorioId);
+      if (!relatorio) {
+        alert('Relatório não encontrado');
+        return;
+      }
+
+      const dados = JSON.parse(relatorio.dadosJson);
+      const janelaImpressao = window.open('', '_blank');
+      
+      if (!janelaImpressao) {
+        alert('Permita pop-ups para imprimir');
+        return;
+      }
+
+      janelaImpressao.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>${relatorio.titulo}</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 20px; 
+              font-size: 12px;
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 20px;
+              border-bottom: 2px solid #333;
+              padding-bottom: 10px;
+            }
+            .section { 
+              margin-bottom: 15px; 
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-bottom: 15px;
+              font-size: 10px;
+            }
+            th, td { 
+              border: 1px solid #ddd; 
+              padding: 6px; 
+              text-align: left; 
+            }
+            th { 
+              background-color: #f5f5f5; 
+              font-weight: bold;
+            }
+            .stats-grid { 
+              display: grid; 
+              grid-template-columns: repeat(3, 1fr); 
+              gap: 10px; 
+              margin-bottom: 15px;
+            }
+            .stat-card { 
+              border: 1px solid #ddd; 
+              padding: 10px; 
+              border-radius: 4px;
+              text-align: center;
+            }
+            .stat-card h3 {
+              margin: 0 0 5px 0;
+              font-size: 11px;
+              color: #666;
+            }
+            .stat-card p {
+              margin: 0;
+              font-size: 14px;
+              font-weight: bold;
+            }
+            @media print {
+              body { margin: 10px; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1 style="margin: 0 0 5px 0; font-size: 16px;">${relatorio.titulo}</h1>
+            <p style="margin: 0; color: #666;">Gerado em: ${new Date(relatorio.geradoEm).toLocaleDateString('pt-BR')} às ${new Date(relatorio.geradoEm).toLocaleTimeString('pt-BR')}</p>
+            <p style="margin: 0; color: #666;">Por: ${relatorio.usuario.nome}</p>
+          </div>
+
+          <div class="section">
+            <h2 style="margin: 0 0 10px 0; font-size: 14px;">Estatísticas</h2>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <h3>Total de Senhas</h3>
+                <p>${dados.estatisticas.totalSenhas || 0}</p>
+              </div>
+              <div class="stat-card">
+                <h3>Atendimentos Concluídos</h3>
+                <p>${dados.estatisticas.atendimentosConcluidos || 0}</p>
+              </div>
+              <div class="stat-card">
+                <h3>Tempo Médio de Espera</h3>
+                <p>${dados.estatisticas.tempoMedioEspera || 0} min</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2 style="margin: 0 0 10px 0; font-size: 14px;">Detalhes das Senhas (${dados.detalhes.length})</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Paciente</th>
+                  <th>Idade</th>
+                  <th>Prioridade</th>
+                  <th>Status</th>
+                  <th>Tempo Espera</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${dados.detalhes.slice(0, 50).map((item: any) => `
+                  <tr>
+                    <td>${item.codigo || '-'}</td>
+                    <td>${item.paciente?.nome || '-'}</td>
+                    <td>${item.paciente?.idade || '-'}</td>
+                    <td>${item.prioridade || '-'}</td>
+                    <td>${item.status || '-'}</td>
+                    <td>${item.tempoEspera || 0} min</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            ${dados.detalhes.length > 50 ? 
+              `<p style="text-align: center; color: #666; font-style: italic;">
+                ... e mais ${dados.detalhes.length - 50} registros
+              </p>` : ''}
+          </div>
+
+          <div class="no-print" style="margin-top: 20px; text-align: center;">
+            <button onclick="window.print()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+              Imprimir
+            </button>
+            <button onclick="window.close()" style="padding: 10px 20px; margin-left: 10px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">
+              Fechar
+            </button>
+          </div>
+        </body>
+        </html>
+      `);
+      
+      janelaImpressao.document.close();
+      
+    } catch (error: any) {
+      console.error('Erro ao preparar impressão:', error);
+      alert('Erro ao preparar a impressão: ' + error.message);
+    }
+  };
 
   const handleGerarRelatorio = () => {
     const filtros = prepararFiltros()
     gerarRelatorioMutation.mutate(filtros)
   }
 
-  // Dados mockados para a UI (mantendo a aparência original)
+  // Dados DINÂMICOS para a UI
   const relatoriosDisponiveis = [
     {
       id: 'diario',
       title: 'Relatório Diário',
       description: 'Estatísticas detalhadas do atendimento do dia atual, incluindo volume de pacientes e tempo de espera.',
       icon: Calendar,
-      stats: { visitas: relatorios?.relatorios.filter((r: Relatorio) => r.tipo === 'DIARIO').length || 0, crescimento: '+12%', tempo: '18min' },
+      stats: { 
+        visitas: stats?.senhasHoje.total || 0, 
+        crescimento: stats?.senhasHoje.crescimento || '+0%', 
+        tempo: `${stats?.tempoMedio.espera || 0}min` 
+      },
       color: 'from-red-500 to-red-600'
     },
     {
@@ -444,7 +515,11 @@ const handleImprimir = async (relatorioId: string) => {
       title: 'Relatório Semanal',
       description: 'Análise semanal do fluxo de pacientes, tendências e comparações com semanas anteriores.',
       icon: BarChart3,
-      stats: { visitas: relatorios?.relatorios.filter((r: Relatorio) => r.tipo === 'SEMANAL').length || 0, crescimento: '+8%', tempo: '157' },
+      stats: { 
+        visitas: relatorios?.relatorios.filter((r: Relatorio) => r.tipo === 'SEMANAL').length || 0, 
+        crescimento: '+8%', 
+        tempo: '157' 
+      },
       color: 'from-blue-500 to-blue-600'
     },
     {
@@ -452,7 +527,11 @@ const handleImprimir = async (relatorioId: string) => {
       title: 'Relatório Mensal',
       description: 'Visão abrangente do mês, incluindo picos de atendimento, sazonalidades e performance geral.',
       icon: TrendingUp,
-      stats: { visitas: relatorios?.relatorios.filter((r: Relatorio) => r.tipo === 'MENSAL').length || 0, crescimento: '+15%', tempo: '160' },
+      stats: { 
+        visitas: relatorios?.relatorios.filter((r: Relatorio) => r.tipo === 'MENSAL').length || 0, 
+        crescimento: '+15%', 
+        tempo: '160' 
+      },
       color: 'from-purple-500 to-purple-600'
     },
     {
@@ -460,7 +539,11 @@ const handleImprimir = async (relatorioId: string) => {
       title: 'Relatório Anual',
       description: 'Consolidação anual com análises de crescimento, sazonalidades e planejamento estratégico.',
       icon: Users,
-      stats: { visitas: relatorios?.relatorios.filter((r: Relatorio) => r.tipo === 'ANUAL').length || 0, crescimento: '+22%', tempo: '159' },
+      stats: { 
+        visitas: relatorios?.relatorios.filter((r: Relatorio) => r.tipo === 'ANUAL').length || 0, 
+        crescimento: '+22%', 
+        tempo: '159' 
+      },
       color: 'from-indigo-500 to-indigo-600'
     },
     {
@@ -468,17 +551,22 @@ const handleImprimir = async (relatorioId: string) => {
       title: 'Relatório Personalizado',
       description: 'Crie relatórios customizados com períodos específicos, filtros avançados e métricas personalizadas.',
       icon: Filter,
-      stats: { filtros: '∞', opcoes: '25+', metricas: '10+' },
+      stats: { 
+        filtros: '∞', 
+        opcoes: '25+', 
+        metricas: '10+' 
+      },
       color: 'from-orange-500 to-orange-600'
     }
   ]
 
+  // Estatísticas gerais DINÂMICAS
   const estatisticasGerais = {
-    senhasHoje: 155,
-    muitoUrgente: 22,
-    urgente: 88,
-    poucoUrgente: 47,
-    esteMes: relatorios?.relatorios.length || 0
+    senhasHoje: stats?.senhasHoje.total || 0,
+    muitoUrgente: stats?.prioridades.MUITO_URGENTE || 0,
+    urgente: stats?.prioridades.URGENTE || 0,
+    poucoUrgente: stats?.prioridades.POUCO_URGENTE || 0,
+    esteMes: stats?.totalSenhasMes || 0
   }
 
   useEffect(() => {
@@ -509,39 +597,52 @@ const handleImprimir = async (relatorioId: string) => {
             </div>
           </div>
 
-          {/* Estatísticas Rápidas */}
+          {/* Estatísticas Rápidas - AGORA DINÂMICAS */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <Card>
               <CardContent className="p-4">
-                <div className="text-2xl font-bold text-red-600">{estatisticasGerais.senhasHoje}</div>
+                <div className="text-2xl font-bold text-red-600 flex items-center">
+                  {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : estatisticasGerais.senhasHoje}
+                </div>
                 <p className="text-xs text-gray-500">SENHAS HOJE</p>
               </CardContent>
             </Card>
             
             <Card>
               <CardContent className="p-4">
-                <div className="text-2xl font-bold text-orange-600">{estatisticasGerais.muitoUrgente}</div>
+                <div className="text-2xl font-bold text-orange-600 flex items-center">
+                  {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : estatisticasGerais.muitoUrgente}
+                  <AlertTriangle className="h-4 w-4 ml-1" />
+                </div>
                 <p className="text-xs text-gray-500">MUITO URGENTE</p>
               </CardContent>
             </Card>
             
             <Card>
               <CardContent className="p-4">
-                <div className="text-2xl font-bold text-blue-600">{estatisticasGerais.urgente}</div>
+                <div className="text-2xl font-bold text-blue-600 flex items-center">
+                  {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : estatisticasGerais.urgente}
+                </div>
                 <p className="text-xs text-gray-500">URGENTE</p>
               </CardContent>
             </Card>
             
             <Card>
               <CardContent className="p-4">
-                <div className="text-2xl font-bold text-green-600">{estatisticasGerais.poucoUrgente}</div>
+                <div className="text-2xl font-bold text-green-600 flex items-center">
+                  {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : estatisticasGerais.poucoUrgente}
+                  <UserCheck className="h-4 w-4 ml-1" />
+                </div>
                 <p className="text-xs text-gray-500">POUCO URGENTE</p>
               </CardContent>
             </Card>
             
             <Card>
               <CardContent className="p-4">
-                <div className="text-2xl font-bold text-purple-600">{estatisticasGerais.esteMes}</div>
+                <div className="text-2xl font-bold text-purple-600 flex items-center">
+                  {statsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : estatisticasGerais.esteMes}
+                  <TrendingUp className="h-4 w-4 ml-1" />
+                </div>
                 <p className="text-xs text-gray-500">ESTE MÊS</p>
               </CardContent>
             </Card>
@@ -560,10 +661,10 @@ const handleImprimir = async (relatorioId: string) => {
                         <Icon className="h-6 w-6 text-white" />
                       </div>
                       <Badge variant="outline" className="text-xs">
-                        {relatorio.id === 'diario' ? '17' : 
-                         relatorio.id === 'semanal' ? 'M' :
-                         relatorio.id === 'mensal' ? '📊' :
-                         relatorio.id === 'anual' ? '👥' : '🔧'}
+                        {relatorio.id === 'diario' ? '📊' : 
+                         relatorio.id === 'semanal' ? '📅' :
+                         relatorio.id === 'mensal' ? '🗓️' :
+                         relatorio.id === 'anual' ? '📈' : '⚙️'}
                       </Badge>
                     </div>
                     
@@ -574,10 +675,15 @@ const handleImprimir = async (relatorioId: string) => {
                   </CardHeader>
                   
                   <CardContent className="pt-0">
-                    {/* Estatísticas do Relatório */}
+                    {/* Estatísticas do Relatório - DINÂMICAS */}
                     <div className="grid grid-cols-3 gap-2 mb-4 text-center">
                       <div className="p-2 bg-gray-50 rounded">
-                        <div className="font-bold text-sm">{Object.values(relatorio.stats)[0]}</div>
+                        <div className="font-bold text-sm">
+                          {relatorio.id === 'diario' && statsLoading ? 
+                            <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 
+                            Object.values(relatorio.stats)[0]
+                          }
+                        </div>
                         <div className="text-xs text-gray-500">{Object.keys(relatorio.stats)[0].toUpperCase()}</div>
                       </div>
                       <div className="p-2 bg-gray-50 rounded">
@@ -714,11 +820,13 @@ const handleImprimir = async (relatorioId: string) => {
                   )}
                   Aplicar Filtros
                 </Button>
-                <Button variant="outline">
+                <Button variant="outline" onClick={() => {
+                  setPeriodo('Hoje')
+                  setPrioridade('Todas as Prioridades')
+                  setTurno('Todos os Turnos')
+                  setFaixaEtaria('Todas as Idades')
+                }}>
                   Limpar Filtros
-                </Button>
-                <Button variant="outline">
-                  Salvar Filtro
                 </Button>
               </div>
             </CardContent>
@@ -736,7 +844,7 @@ const handleImprimir = async (relatorioId: string) => {
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                 {['PDF', 'CSV', 'Email', 'Imprimir'].map((format) => (
                   <Button 
-                     key={format}
+                    key={format}
                     variant="outline" 
                     className="h-20 flex flex-col items-center justify-center space-y-2"
                     onClick={() => {
