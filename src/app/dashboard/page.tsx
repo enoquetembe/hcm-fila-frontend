@@ -63,13 +63,13 @@ export default function DashboardPage() {
   const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: dashboardAPI.getStats,
-    refetchInterval: 30000, // Atualizar a cada 30 segundos
+    refetchInterval: 30000,
   })
 
   const { data: filaData, isLoading: filaLoading, refetch: refetchFila } = useQuery({
     queryKey: ['fila-resumo'],
     queryFn: dashboardAPI.getFilaResumo,
-    refetchInterval: 15000, // Atualizar a cada 15 segundos
+    refetchInterval: 15000,
   })
 
   // Mutations
@@ -106,9 +106,7 @@ export default function DashboardPage() {
       newErrors.nomeCompleto = 'Nome completo é obrigatório'
     }
 
-    // Número de identificação NÃO é mais obrigatório - removida validação
-
-    if (!formData.idade || formData.idade < 0 || formData.idade > 14) { // Alterado para 0-14
+    if (!formData.idade || formData.idade < 0 || formData.idade > 14) {
       newErrors.idade = 'Idade deve estar entre 0 e 14 anos'
     }
 
@@ -126,7 +124,6 @@ export default function DashboardPage() {
 
   const handleInputChange = (field: keyof NovoPackienteForm, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }))
-    // Limpar erro do campo quando usuário digita
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }))
     }
@@ -138,24 +135,21 @@ export default function DashboardPage() {
     if (!validateForm()) return
 
     try {
-      // 1. Criar paciente
       const novoPaciente = await criarPacienteMutation.mutateAsync({
         nomeCompleto: formData.nomeCompleto,
-        numeroIdentificacao: formData.numeroIdentificacao || undefined, // Pode ser undefined
+        numeroIdentificacao: formData.numeroIdentificacao || undefined,
         idade: formData.idade,
         telefone: formData.telefone || undefined,
         responsavel: formData.responsavel || undefined,
         telefoneResponsavel: formData.telefoneResponsavel || undefined
       })
 
-      // 2. Criar senha
       await criarSenhaMutation.mutateAsync({
         pacienteId: novoPaciente.paciente.id,
         sintomas: formData.sintomas,
         prioridade: formData.prioridade as 'MUITO_URGENTE' | 'URGENTE' | 'POUCO_URGENTE'
       })
 
-      // 3. Limpar formulário
       setFormData({
         nomeCompleto: '',
         numeroIdentificacao: '',
@@ -332,7 +326,7 @@ export default function DashboardPage() {
                       </FormItem>
 
                       <FormItem>
-                        <FormLabel>Número de Identificação</FormLabel> {/* Removido * */}
+                        <FormLabel>Número de Identificação</FormLabel>
                         <FormControl>
                           <Input 
                             placeholder="ID do paciente (opcional)..."
@@ -341,7 +335,6 @@ export default function DashboardPage() {
                             disabled={isSubmitting}
                           />
                         </FormControl>
-                        {/* Removida validação de erro para número de identificação */}
                       </FormItem>
 
                       <FormItem>
@@ -396,7 +389,6 @@ export default function DashboardPage() {
                       </FormItem>
                     </div>
                     
-                    {/* Sintomas primeiro */}
                     <FormItem>
                       <FormLabel>Sintomas *</FormLabel>
                       <FormControl>
@@ -411,7 +403,6 @@ export default function DashboardPage() {
                       {errors.sintomas && <FormMessage>{errors.sintomas}</FormMessage>}
                     </FormItem>
 
-                    {/* Prioridade depois */}
                     <FormItem>
                       <FormLabel>Prioridade *</FormLabel>
                       <FormControl>
@@ -455,7 +446,7 @@ export default function DashboardPage() {
               </Card>
             </div>
 
-            {/* Fila Actual */}
+            {/* Fila Actual - CORRIGIDO COM NOME DO PACIENTE */}
             <div className="lg:col-span-1">
               <Card>
                 <CardHeader>
@@ -499,15 +490,19 @@ export default function DashboardPage() {
                                   </Badge>
                                 )}
                               </div>
+                              
+                              {/* ✅ NOME COMPLETO DO PACIENTE - CORRIGIDO */}
                               <p className="font-medium text-sm mt-1 truncate">
-                                {item.paciente.nome}
+                                {item.paciente?.nomeCompleto || item.paciente?.nome || 'Nome não disponível'}
                               </p>
+                              
                               <p className="text-xs text-gray-500">
-                                {item.paciente.idade} anos • {formatTempoEspera(item.tempoEspera)}
+                                {item.paciente?.idade || 0} anos • {formatTempoEspera(item.tempoEspera)}
+                                {item.paciente?.identificacao && ` • ID: ${item.paciente.identificacao}`}
                               </p>
                             </div>
                             <div className="text-right">
-                              <div className="text-xs text-gray-500">#{item.posicao}</div>
+                              <div className="text-xs text-gray-500">#{item.posicao || index + 1}</div>
                             </div>
                           </div>
                         </div>
